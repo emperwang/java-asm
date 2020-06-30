@@ -484,6 +484,7 @@ public class ClassWriter extends ClassVisitor {
     int size = 24 + 2 * interfaceCount;
     int fieldsCount = 0;
     FieldWriter fieldWriter = firstField;
+    // 单向链表  field
     while (fieldWriter != null) {
       ++fieldsCount;
       size += fieldWriter.computeFieldInfoSize();
@@ -491,6 +492,7 @@ public class ClassWriter extends ClassVisitor {
     }
     int methodsCount = 0;
     MethodWriter methodWriter = firstMethod;
+    // method单向链表
     while (methodWriter != null) {
       ++methodsCount;
       size += methodWriter.computeMethodInfoSize();
@@ -608,6 +610,7 @@ public class ClassWriter extends ClassVisitor {
 
     // Second step: allocate a ByteVector of the correct size (in order to avoid any array copy in
     // dynamic resizes) and fill it with the ClassFile content.
+    // 此result 记录 字节码的容器
     ByteVector result = new ByteVector(size);
     result.putInt(0xCAFEBABE).putInt(version);
     symbolTable.putConstantPool(result);

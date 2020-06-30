@@ -191,25 +191,30 @@ public class ClassReader {
     this.b = classFileBuffer;
     // Check the class' major_version. This field is after the magic and minor_version fields, which
     // use 4 and 2 bytes respectively.
+    // 进行 version的一些判断
     if (checkClassVersion && readShort(classFileOffset + 6) > Opcodes.V15) {
       throw new IllegalArgumentException(
           "Unsupported class file major version " + readShort(classFileOffset + 6));
     }
     // Create the constant pool arrays. The constant_pool_count field is after the magic,
     // minor_version and major_version fields, which use 4, 2 and 2 bytes respectively.
+    // 读取 常量池 的数量
     int constantPoolCount = readUnsignedShort(classFileOffset + 8);
+    // 常量池偏移的地址
     cpInfoOffsets = new int[constantPoolCount];
+    // 常量池  utf8 的表现方式
     constantUtf8Values = new String[constantPoolCount];
     // Compute the offset of each constant pool entry, as well as a conservative estimate of the
     // maximum length of the constant pool strings. The first constant pool entry is after the
     // magic, minor_version, major_version and constant_pool_count fields, which use 4, 2, 2 and 2
     // bytes respectively.
-    int currentCpInfoIndex = 1;
-    int currentCpInfoOffset = classFileOffset + 10;
+    int currentCpInfoIndex = 1; // 当前要读取的常量池中 第几个常量
+    int currentCpInfoOffset = classFileOffset + 10; // 记录偏移地址
     int currentMaxStringLength = 0;
     boolean hasBootstrapMethods = false;
     boolean hasConstantDynamic = false;
     // The offset of the other entries depend on the total size of all the previous entries.
+    // 遍历读取常量池中内容
     while (currentCpInfoIndex < constantPoolCount) {
       cpInfoOffsets[currentCpInfoIndex++] = currentCpInfoOffset + 1;
       int cpInfoSize;
@@ -292,6 +297,7 @@ public class ClassReader {
    * @throws IOException if an exception occurs during reading.
    */
   public ClassReader(final String className) throws IOException {
+    // 获取class文件的内容，来构建 ClassReader
     this(
         readStream(
             ClassLoader.getSystemResourceAsStream(className.replace('.', '/') + ".class"), true));
@@ -311,8 +317,10 @@ public class ClassReader {
       throw new IOException("Class not found");
     }
     try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+      // 设置一个 4096的byte数组,来存储class的字节码内容
       byte[] data = new byte[INPUT_STREAM_DATA_CHUNK_SIZE];
       int bytesRead;
+      // 读取字节码
       while ((bytesRead = inputStream.read(data, 0, data.length)) != -1) {
         outputStream.write(data, 0, bytesRead);
       }
@@ -397,6 +405,7 @@ public class ClassReader {
    * @param parsingOptions the options to use to parse this class. One or more of {@link
    *     #SKIP_CODE}, {@link #SKIP_DEBUG}, {@link #SKIP_FRAMES} or {@link #EXPAND_FRAMES}.
    */
+  // 分析 class 的入口
   public void accept(final ClassVisitor classVisitor, final int parsingOptions) {
     accept(classVisitor, new Attribute[0], parsingOptions);
   }
@@ -415,6 +424,27 @@ public class ClassReader {
    * @param parsingOptions the options to use to parse this class. One or more of {@link
    *     #SKIP_CODE}, {@link #SKIP_DEBUG}, {@link #SKIP_FRAMES} or {@link #EXPAND_FRAMES}.
    */
+  // 此中的读取 要紧密结合 jvm class结构来看
+  /*
+  ClassFile {
+    u4 magic;
+    u2 minor_version;
+    u2 major_version;
+    u2 constant_pool_count;
+    cp_info constant_pool[constant_pool_count-1];
+    u2 access_flags;
+    u2 this_class;
+    u2 super_class;
+    u2 interfaces_count;
+    u2 interfaces[interfaces_count];
+    u2 fields_count;
+    field_info fields[fields_count];
+    u2 methods_count;
+    method_info methods[methods_count];
+    u2 attributes_count;
+    attribute_info attributes[attributes_count];
+}
+   */
   public void accept(
       final ClassVisitor classVisitor,
       final Attribute[] attributePrototypes,
@@ -426,12 +456,18 @@ public class ClassReader {
 
     // Read the access_flags, this_class, super_class, interface_count and interfaces fields.
     char[] charBuffer = context.charBuffer;
+    // 通过构造器后,header指向了 常量池后
     int currentOffset = header;
+    // u2 access_flags
     int accessFlags = readUnsignedShort(currentOffset);
+    // u2 this_class
     String thisClass = readClass(currentOffset + 2, charBuffer);
+    // u2 super_class
     String superClass = readClass(currentOffset + 4, charBuffer);
+    // u2 interfaces_count
     String[] interfaces = new String[readUnsignedShort(currentOffset + 6)];
     currentOffset += 8;
+    // 读取interface
     for (int i = 0; i < interfaces.length; ++i) {
       interfaces[i] = readClass(currentOffset, charBuffer);
       currentOffset += 2;
@@ -474,8 +510,9 @@ public class ClassReader {
     // - The non standard attributes (linked with their {@link Attribute#nextAttribute} field).
     //   This list in the <i>reverse order</i> or their order in the ClassFile structure.
     Attribute attributes = null;
-
+    // 此处得到 attribute的偏移地址
     int currentAttributeOffset = getFirstAttributeOffset();
+    // 读取 class文件中 attribute
     for (int i = readUnsignedShort(currentAttributeOffset - 2); i > 0; --i) {
       // Read the attribute_info's attribute_name and attribute_length fields.
       String attributeName = readUTF8(currentAttributeOffset, charBuffer);
@@ -483,6 +520,7 @@ public class ClassReader {
       currentAttributeOffset += 6;
       // The tests are sorted in decreasing frequency order (based on frequencies observed on
       // typical classes).
+      // 从此处可以 了解到 下面的这些属性 都是存储在 attribute中
       if (Constants.SOURCE_FILE.equals(attributeName)) {
         sourceFile = readUTF8(currentAttributeOffset, charBuffer);
       } else if (Constants.INNER_CLASSES.equals(attributeName)) {
@@ -540,6 +578,7 @@ public class ClassReader {
 
     // Visit the class declaration. The minor_version and major_version fields start 6 bytes before
     // the first constant pool entry, which itself starts at cpInfoOffsets[1] - 1 (by definition).
+    // 读取 class的信息
     classVisitor.visit(
         readInt(cpInfoOffsets[1] - 7), accessFlags, thisClass, signature, superClass, interfaces);
 
